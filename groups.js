@@ -18,15 +18,40 @@ const init = connection => {
         })
     })
     app.get('/:id', async(req, res) => {
+        const [group] = await connection.execute('select groups.*, groups_users.role from groups left join groups_users on groups_users.group_id = groups.id and groups_users.user_id = ? where groups.id = ?', [
+            req.session.user.id,
+            req.params.id
+        ])
         const [pendings] = await connection.execute('select groups_users.*, users.name from groups_users inner join users on groups_users.user_id = users.id and groups_users.group_id = ? and groups_users.role like "pending"', [
             req.params.id
         ])
+        const [games] = await connection.execute('select * from games')
         res.render('group', {
-            pendings
+            pendings,
+            group: group[0],
+            games
         })
     })
-    app.get('/:id/pending/:op', async(req, res) => {
-
+    app.get('/:id/pending/>idGU/:op', async(req, res) => {
+        const [group] = await connection.execute('select * from groups left join groups_users on groups_users.group_id = groups.id and groups_users.user_id = ? where groups.id = ?', [
+            req.session.user.id,
+            req.params.id
+        ])
+        if (group.length === 0 || group[0].role !== 'owner') {
+            res.redirect('/groups/' + req.params.id)
+        } else {
+            if (req.params.op === 'yes') {
+                await connection.execute('update groups_users set role = "user" where id = ? limit 1', [
+                    req.params.idGU
+                ])
+                res.redirect('/groups/' + req.params.id)
+            } else {
+                await connection.execute('delete from groups_users where id = ? limit 1', [
+                    req.params.idGU
+                ])
+                res.redirect('/groups/' + req.params.id)
+            }
+        }
     })
     app.get('/:id/join', async(req, res) => {
         const [rows, fields] = await connection.execute('select * from groups_users where user_id = ? and group_id = ?', [
